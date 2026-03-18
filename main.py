@@ -29,7 +29,9 @@ def ask_gemini():
 
     body = {"contents": [{"parts": [{"text": prompt}]}]}
     
-    response = requests.post(url, json=body)
+
+    response = requests.post(url, json=body, timeout=30)
+
     data = response.json()
     
     if "candidates" not in data:
