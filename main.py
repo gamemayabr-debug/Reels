@@ -1,6 +1,5 @@
 import requests
 import os
-
 TOKEN = os.getenv("8704824778:AAF1ISSK3UAYdvuHki6IriA-LDeVMlrnA6c")
 CHAT_ID = os.getenv("447181422")
 
