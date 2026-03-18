@@ -3,19 +3,19 @@ import requests
 
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not TOKEN or not CHAT_ID:
     print("ERROR: BOT_TOKEN or CHAT_ID is missing")
     exit(1)
 
-if not GEMINI_API_KEY:
-    print("ERROR: GEMINI_API_KEY is missing")
+if not GROQ_API_KEY:
+    print("ERROR: GROQ_API_KEY is missing")
     exit(1)
 
-# --- Запрос к Gemini ---
-def ask_gemini():
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+# --- Запрос к Groq ---
+def ask_groq():
+    url = "https://api.groq.com/openai/v1/chat/completions"
     
     prompt = """Ты эксперт по контенту для социальных сетей в России.
 
@@ -27,38 +27,59 @@ def ask_gemini():
 
 Пиши живо, как советуешь другу-блогеру."""
 
-    body = {"contents": [{"parts": [{"text": prompt}]}]}
-    
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-    response = requests.post(url, json=body, timeout=30)
+    body = {
+        "model": "llama-3.3-70b-versatile",  # или "llama-3.1-8b-instant" для ещё большей скорости
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_completion_tokens": 800,  # лимит токенов на ответ
+        "stream": False
+    }
 
-    data = response.json()
+    try:
+        response = requests.post(url, headers=headers, json=body, timeout=30)
+        response.raise_for_status()  # поднимает исключение при 4xx/5xx
+        data = response.json()
+        
+        if "choices" not in data or not data["choices"]:
+            print("Groq error: нет choices в ответе", data)
+            exit(1)
+        
+        return data["choices"][0]["message"]["content"]
     
-    if "candidates" not in data:
-        print("Gemini error:", data)
+    except requests.exceptions.HTTPError as http_err:
+        print(f"Groq HTTP error: {http_err}")
+        print("Ответ сервера:", response.text)
         exit(1)
-    
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        print("Groq request error:", e)
+        exit(1)
 
 # --- Получаем идеи ---
-print("Запрашиваю идеи у Gemini...")
-ideas = ask_gemini()
+print("Запрашиваю идеи у Groq...")
+ideas = ask_groq()
 print("Ответ получен")
 
 # --- Формируем сообщение ---
 message = "🎬 *Идеи для Reels на этой неделе*\n_(оформление документов в России)_\n\n" + ideas
 
 # --- Отправка в Telegram ---
-url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+tg_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
 try:
-    resp = requests.post(url, data={
+    resp = requests.post(tg_url, data={
         "chat_id": CHAT_ID,
         "text": message,
         "parse_mode": "Markdown"
     })
-    print("Response status code:", resp.status_code)
-    print("Response text:", resp.text)
+    print("Telegram response status code:", resp.status_code)
+    print("Telegram response text:", resp.text)
 except Exception as e:
-    print("ERROR sending message:", e)
+    print("ERROR sending message to Telegram:", e)
     exit(1)
